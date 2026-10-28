@@ -17,6 +17,7 @@
 #		 - Cisco ASA: show run
 #		 - Netscreen ScreenOS 6: get config
 #		 - Checkpoint Firewall-1: odumper/ofiller csv format in, fwdoc nats in, dbedit out
+#		 - Palo Alto Panos NGFW: no input yet, terraform.tfvars out only
 #		 - Many similar typed configs can be "cat'ed" together for comparison via 'print' modes or duplicates Data::Dumper prints
 
 # Currently supported input firewall log types are:
@@ -33,22 +34,29 @@
 #---------------------------------------------------------------------------------------------------
 
 # Version v0.7.0 - This release adds a cidr filter after the rr object expansions during log to rule matching,
-#   20/08/2026     cleans up the cisco log parser,
-#   		   Sorts out default serivce definitions so they dont prevent group matching,
-#   		   Adds support for ios configs / syslog, 
-#   		   Adds a palo alto terraform output config outputer and some new rr log parsing optoins.
-#                  Makes the log parser complete on first hit (most speciffic only)
-#                  Adding a service definition other than the default to a config bundle now loads logs of that fw service defaults type.
-#                  Updated service ports so that port{proto} can contain a comma seperated list of ports and port ranges for each protocol.
-#                  Updated comments in output subs so they are displayed in a useful way.
-#                  Added palo defaults to use lists of ports. 
-#                  Updated logjson processing to output a single jsonlog file for each firewall.
-#                  Fixed loads of errors!!
+#   20/08/2026   - Updates the cisco log parser to inslue IOS switch syslogs,
+#                - Adds support for ios configs, 
+#                - Sorts out default serivce definitions so they dont prevent group matching,
+#                - Adds a palo alto terraform panos ngfw config outputer 
+#                - Adds some new rr log parsing optoins: fltadd logs hits to rules but does not remove rules if not hit.
+#                - Makes the log filter complete on first hit again (most speciffic only)
+#                - Adding a service definition other than the default to a config bundle now loads logs of that fw service type.
+#                - Updated service ports so that port{proto} can contain a comma seperated list of ports and port ranges for each protocol.
+#                - Updated comments in output subs so they are displayed in a useful way.
+#                - Added some palo defaults required for MS networks.
+#                - Updated logjson processing to output a jsonlog file for each firewall config bundle..
+#                - Added 'output' mode to directly output one firewall config to another config type.
+#                - Updated copylogs mode to copy logs to multiple conifgs at once.
+#                - Updated 'rr' mode so that all rule build types can be run and the best can be chosen.
+#                - Updated 'bldobjs' mode so that it also builds rules.
+#                - Fixed loads of errors!!
+#                  TODO: skip group if it is bigger than the list of objects being checked - optmization only no change to functionality.
+#                  TODO: identify palo app groups based on presence of portunknown in groups instead of postfixing '-Applications'
 
 # Version v0.6.3 - This release updates the config pasers to permit you to specify the default service
 #   25/08/2017     set used to scan rules and service objects, for example to permit a checkpoint csv 
-#   		   to be parsed using Cisco ASA config default service definitions.
-#   		 - This release also add's close statements for all files opened while parsing logs.
+#                  to be parsed using Cisco ASA config default service definitions.
+#                - This release also add's close statements for all files opened while parsing logs.
 
 # Version v0.6.2 - This release fixes the bug in the cisco asa drop log parser that missed %ASA-6-106100 
 #   13/04/2017     logs and also mutes the SOMETHINGELSE print in droplog processing mode.
@@ -442,42 +450,42 @@ use JSON;
 #===================================================================================================
 
 if ((defined($ARGV[0])) && ($ARGV[0] =~ m/-help$|^-h$/i)) {
-print "\n\n360-faar.pl v0.7.0 Help\n";
-print "---------------------------------------------------------\n\n";
-print "How to run:\n";
-print "---------------------------------------------------------\n";
-print "./360-faar.pl od=|ns=|cs=config_file[,log_file,nat_file] [logparse=nornal|drops] [json=in|out]\n\n";
-print "eg: to run the TestData files provided in the 360AnalyticsLtd.zip, copy them to the 360-FAAR folder and run:\n";
-print "./360-faar.pl od=TestData.csv od=TestData2.csv od=TestData3.csv\n\n";
-print "you can cat many log files together, checkpoint and syslog headers are recognised within the new log file\n";
-print "if you dont have a file, touch (create) a file called fake and use this as a place holder\n\n";
-print "CONFIG[,LOG[,NAT]] TYPES SUPPORTED:\n";
-print "---------------------------------------------------------\n";
-print "odumper/ofiller format:     	od= (csv format config), (checkpoint logexported logs), (fwdoc format nats)\n";
-print "  eg: ./360-faar.pl od=configfile.csv\n";
-print "  eg: ./360-faar.pl od=configfile.csv,logexport.log\n";
-print "  eg: ./360-faar.pl od=configfile.csv,logexport.log,fwdocnats.csv\n\n";
-print "netscreen screenos format:  	ns= (screenos6 \"get config\" format config), (syslog format netscreen logs), (fwdoc nats (not required but option))\n";
-print "  eq: ./360-faar.pl ns=configfile.txt\n";
-print "  eg: ./360-faar.pl ns=configfile.txt,syslog.txt\n";
-print "  eg: ./360-faar.pl ns=configfile.txt,syslog.txt,fwdocnats.csv\n\n";
-print "cisco pix or asa format:    	cs= (pix asa 8.3+ config), (syslog format pix asa logs), (fwdoc nats (not required but option))\n";
-print "  eg: ./360-faar.pl cs=configfile.txt\n";
-print "  eg: ./360-faar.pl cs=configfile.txt,syslog.txt\n";
-print "  eg: ./360-faar.pl cs=configfile.txt,syslog.txt,fwdocnats.csv\n";
-print "\n";
-print "---------------------------------------------------------\n";
-print "LOG PARSING OPTIONS: logparse=nornal|drops\n\n";
-print "normal = process in ACCEPT Log and Rule MODE\n";
-print "drops  = process in DROP LOG MODE and output profile as ACCEPT rules\n";
-print "         'ures' analysis is the defualt option\n";
-print "         these policies can be used to compare dropped connection profiles.\n\n";
-print "---------------------------------------------------------\n";
-print "JSON OPTIONS: json=in|out\n\n";
-print "out = output logjson.txt or droplogjson.txt\n";
-print "in  = read logjson.txt or droplogjson.txt process additional\n";
-print "      log files then output logjson.txt or droplogjson.txt\n\n";
-exit;
+	print "\n\n360-faar.pl v0.7.0 Help\n";
+	print "---------------------------------------------------------\n\n";
+	print "How to run:\n";
+	print "---------------------------------------------------------\n";
+	print "./360-faar.pl od=|ns=|cs=config_file[,log_file,nat_file] [logparse=nornal|drops] [json=in|out]\n\n";
+	print "eg: to run the TestData files provided in the 360AnalyticsLtd.zip, copy them to the 360-FAAR folder and run:\n";
+	print "./360-faar.pl od=TestData.csv od=TestData2.csv od=TestData3.csv\n\n";
+	print "you can cat many log files together, checkpoint and syslog headers are recognised within the new log file\n";
+	print "if you dont have a file, touch (create) a file called fake and use this as a place holder\n\n";
+	print "CONFIG[,LOG[,NAT]] TYPES SUPPORTED:\n";
+	print "---------------------------------------------------------\n";
+	print "odumper/ofiller format:     	od= (csv format config), (checkpoint logexported logs), (fwdoc format nats)\n";
+	print "  eg: ./360-faar.pl od=configfile.csv\n";
+	print "  eg: ./360-faar.pl od=configfile.csv,logexport.log\n";
+	print "  eg: ./360-faar.pl od=configfile.csv,logexport.log,fwdocnats.csv\n\n";
+	print "netscreen screenos format:  	ns= (screenos6 \"get config\" format config), (syslog format netscreen logs), (fwdoc nats (not required but option))\n";
+	print "  eq: ./360-faar.pl ns=configfile.txt\n";
+	print "  eg: ./360-faar.pl ns=configfile.txt,syslog.txt\n";
+	print "  eg: ./360-faar.pl ns=configfile.txt,syslog.txt,fwdocnats.csv\n\n";
+	print "cisco pix or asa format:    	cs= (pix asa 8.3+ config), (syslog format pix asa logs), (fwdoc nats (not required but option))\n";
+	print "  eg: ./360-faar.pl cs=configfile.txt\n";
+	print "  eg: ./360-faar.pl cs=configfile.txt,syslog.txt\n";
+	print "  eg: ./360-faar.pl cs=configfile.txt,syslog.txt,fwdocnats.csv\n";
+	print "\n";
+	print "---------------------------------------------------------\n";
+	print "LOG PARSING OPTIONS: logparse=nornal|drops\n\n";
+	print "normal = process in ACCEPT Log and Rule MODE\n";
+	print "drops  = process in DROP LOG MODE and output profile as ACCEPT rules\n";
+	print "         'ures' analysis is the defualt option\n";
+	print "         these policies can be used to compare dropped connection profiles.\n\n";
+	print "---------------------------------------------------------\n";
+	print "JSON OPTIONS: json=in|out\n\n";
+	print "out = output logjson.txt or droplogjson.txt\n";
+	print "in  = read logjson.txt or droplogjson.txt process additional\n";
+	print "      log files then output logjson.txt or droplogjson.txt\n\n";
+	exit;
 }
 
 #===================================================================================================
@@ -498,72 +506,72 @@ foreach my $cmdlinearg (@ARGV) {
 
 # NOTE: Add configs to the global config names hash from the command line arguements
 
-#$cmdlinearg =~ s/^\-*//;
-$cmdlinearg =~ s/^\-+//;
+	#$cmdlinearg =~ s/^\-*//;
+	$cmdlinearg =~ s/^\-+//;
 
-if ($cmdlinearg =~ m/^od=|^od:od=|^od:ns=|^od:cs=|^od:pa=|^od:no=/) {
+	if ($cmdlinearg =~ m/^od=|^od:od=|^od:ns=|^od:cs=|^od:pa=|^od:no=/) {
 
-# NOTE: read odumper format configs in the format: od=<cfg_file>[,<log_file>,<nats_file>]
+	# NOTE: read odumper format configs in the format: od=<cfg_file>[,<log_file>,<nats_file>]
 
-	my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
-	my ($configtype, $serviceset)	 	= split ( ':', $typedef);
-	my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
+		my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
+		my ($configtype, $serviceset)	 	= split ( ':', $typedef);
+		my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
 
-	$confignames{$configfile}{'type'} 	= 'od'	;
+		$confignames{$configfile}{'type'} 	= 'od'	;
 
-	if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
-	if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
-	if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
-	else { $confignames{$configfile}{'serviceset'} 		= 'od' ;}
-}
-
-
-elsif ($cmdlinearg =~ m/^ns=|^ns:ns=|^ns:od=|^ns:cs=|^ns:pa=|^ns:no=/) {
-
-# NOTE: read netscreen format configs in the format: ns=<cfg_file>[,<log_file>,<nats_file>]
-
-	my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
-	my ($configtype, $serviceset)	 	= split ( ':', $typedef);
-	my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
-
-	$confignames{$configfile}{'type'}	= 'ns';
-
-	if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
-	if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
-	if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
-	else { $confignames{$configfile}{'serviceset'} 		= 'ns' ;}
-}
+		if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
+		if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
+		if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
+		else { $confignames{$configfile}{'serviceset'} 		= 'od' ;}
+	}
 
 
-elsif ($cmdlinearg =~ m/^cs=|^cs:cs=|^cs:od=|^cs:ns=|^cs:pa=|^cs:no=/) {
+	elsif ($cmdlinearg =~ m/^ns=|^ns:ns=|^ns:od=|^ns:cs=|^ns:pa=|^ns:no=/) {
 
-# NOTE: read cisco format configs in the format: cs=<cfg_file>[,<log_file>,<nats_file>]
+	# NOTE: read netscreen format configs in the format: ns=<cfg_file>[,<log_file>,<nats_file>]
 
-	my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
-	my ($configtype, $serviceset)	 	= split ( ':', $typedef);
-	my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
+		my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
+		my ($configtype, $serviceset)	 	= split ( ':', $typedef);
+		my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
 
-	$confignames{$configfile}{'type'} 	= 'cs';
+		$confignames{$configfile}{'type'}	= 'ns';
 
-	if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
-	if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
-	if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
-	else { $confignames{$configfile}{'serviceset'} 		= 'cs' ;}
-}
+		if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
+		if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
+		if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
+		else { $confignames{$configfile}{'serviceset'} 		= 'ns' ;}
+	}
+
+
+	elsif ($cmdlinearg =~ m/^cs=|^cs:cs=|^cs:od=|^cs:ns=|^cs:pa=|^cs:no=/) {
+
+	# NOTE: read cisco format configs in the format: cs=<cfg_file>[,<log_file>,<nats_file>]
+
+		my ($typedef,    $conflinearg) 		= split ( '=', $cmdlinearg);
+		my ($configtype, $serviceset)	 	= split ( ':', $typedef);
+		my ($configfile, $logfile, $natsfile) 	= split (/\,/, $conflinearg);
+
+		$confignames{$configfile}{'type'} 	= 'cs';
+
+		if (defined($logfile)    && ($logfile    ne ""))   	{ $confignames{$configfile}{'logfile'} 	  = $logfile	;}
+		if (defined($natsfile)   && ($natsfile   ne "")) 	{ $confignames{$configfile}{'natsfile'}   = $natsfile	;}
+		if (defined($serviceset) && ($serviceset ne ""))   	{ $confignames{$configfile}{'serviceset'} = $serviceset	;} 
+		else { $confignames{$configfile}{'serviceset'} 		= 'cs' ;}
+	}
 
 #---------------------------------------------------------------------------------------------------
 # READ SCRIPT OPTIONS FROM CMD LINE
 #---------------------------------------------------------------------------------------------------
 
-elsif ($cmdlinearg =~ m/^logparse=/) {
-	$cmdlinearg =~ s/^logparse=//;
-	$logparsetype = $cmdlinearg;
-}
+	elsif ($cmdlinearg =~ m/^logparse=/) {
+		$cmdlinearg =~ s/^logparse=//;
+		$logparsetype = $cmdlinearg;
+	}
 
-elsif ($cmdlinearg =~ m/^json=/) {
-	$cmdlinearg =~ s/^json=//;
-	$jsonoutput = $cmdlinearg;
-}
+	elsif ($cmdlinearg =~ m/^json=/) {
+		$cmdlinearg =~ s/^json=//;
+		$jsonoutput = $cmdlinearg;
+	}
 }
 	
 if ($logparsetype ne 'normal') {
@@ -592,17 +600,17 @@ my %lastrashrulebase		;	# the very latest rationalized rulebase made... well out
 STDOUT->autoflush(1);
 
 sub interrupthandler {
-print STDERR "\n\nCTRL-C not active!!  This is to prevent accidentially exiting.\n";
-print STDERR "Type 'exit' to quit or anything else to continue: ";
-my $exit = <STDIN> ;
-if (defined($exit)) {
-	chomp $exit if ref($exit) eq 'SCALAR';
-	$exit =~ s/[\r|\n]+$// ;
-	if ($exit eq 'exit') {
-		print "\n.............signing out\n\n";
-		exit;
+	print STDERR "\n\nCTRL-C not active!!  This is to prevent accidentially exiting.\n";
+	print STDERR "Type 'exit' to quit or anything else to continue: ";
+	my $exit = <STDIN> ;
+	if (defined($exit)) {
+		chomp $exit if ref($exit) eq 'SCALAR';
+		$exit =~ s/[\r|\n]+$// ;
+		if ($exit eq 'exit') {
+			print "\n.............signing out\n\n";
+			exit;
+		}
 	}
-}
 }
 
 #===================================================================================================
@@ -613,30 +621,31 @@ if (defined($exit)) {
 
 if (scalar keys %confignames == 0) {
 
-print "\nNo Configs specified at startup: use 'load' mode to create config bundles...\n\n";
-load_new_config();
+	print "\nNo Configs specified at startup: use 'load' mode to create config bundles...\n\n";
+	load_new_config();
 
-$SIG{INT} = \&interrupthandler;
-} 
+	$SIG{INT} = \&interrupthandler;
+} else {
+	$SIG{INT} = \&interrupthandler;
 
-else {
+	foreach my $config (keys %confignames) {
 
-$SIG{INT} = \&interrupthandler;
-
-foreach my $config (keys %confignames) {
-
-	build_configbundle(
-		$config,
-		\%configbundles);
+		build_configbundle(
+			$config,
+			\%configbundles);
+	}
 }
-}
+
+# NOTE: this interupt handler fails to catch CRTL-C when in user menus.
+
+# $SIG{INT} = \&interrupthandler;
 
 #---------------------------------------------------------------------------------------------------
 # PRINTING THE BANNER FOR THE USER INTERACTION BIT 
 #---------------------------------------------------------------------------------------------------
 
 if ($logparsetype ne 'normal') {
-print " STARTED IN DROPLOG MODE!!\n";
+	print " STARTED IN DROPLOG MODE!!\n";
 }
 
 print "-----------------------------------------------------------------------------------------\n";
@@ -1445,12 +1454,11 @@ my ($rulebincount) = build_rule_info(
 	\%srvcgroupobjs,
 	\%srvcobjects);
 
-print "\n";
-
 #---------------------------------------------------------------------------------------------------
 # PRINT BANNER FOR BINARY RULE PROCESSING COMPLETE
 #---------------------------------------------------------------------------------------------------
 
+print "\n";
 print "-----------------------------------------------------------------------------------------\n";
 print " BINARY RULE MATCH TABLE COMPLETE:\n"			;
 print "   src/dst/port matches procssd	= $rulebincount\n"	;
@@ -3395,7 +3403,7 @@ while (<ASAFILE>) {
 			my @line = split(/\s+/, $line);
 			#my @line = shellwords($_);
 
-			unless (defined($line[0]) && ($line[0] =~ /^host$|^subnet$|^range$|^nat$|^description$/)) {redo INPUTSTAGE;}
+			unless (defined($line[0]) && ($line[0] =~ /^host$|^subnet$|^range$|^nat$|^description$|^comment$/)) {redo INPUTSTAGE;}
 
 			if (($line[0] eq 'host') && (is_ip($line[1]))) {
 				my $ip = $line[1];
@@ -3589,7 +3597,7 @@ while (<ASAFILE>) {
 					$nats_ref->{$natcount}{'natsrvc'}  = 'ORIGINAL'; 
 				}
 
-			} elsif ($line[0] eq 'description') {
+			} elsif ($line[0] =~ /^description$|^comment$/) {
 				my $dummy = shift @line;
 				if (exists $netobjects_ref->{$name}) {
 					$netobjects_ref->{$name}{'description'} = "@line";
@@ -3797,7 +3805,7 @@ while (<ASAFILE>) {
 
 			} 
 
-			elsif ($line[0] eq 'description') {
+			elsif ($line[0] =~ /^description$|^comment$/) {
 				my $dummy = shift @line;
 				if (exists $srvcobjects_ref->{$name}) {
 					$srvcobjects_ref->{$name}{'description'} = "@line";
@@ -10959,7 +10967,7 @@ while (<STDIN>) {
 		$incconobjs 		= 'yes';
 		$filterunloggedrulewithlog = 'no';
 		$translatewithnats 	= 'no';
-		$matchprevrules 	= 'no';
+		$matchprevrules 	= 'yes';
 		$matchprevencryptrules 	= 'no';
 		$addencryptrules 	= 'yes';
 		$resanytoip 		= 'no';
@@ -10978,7 +10986,7 @@ while (<STDIN>) {
 		$incconobjs 		= 'yes';
 		$filterunloggedrulewithlog = 'no';
 		$translatewithnats 	= 'no';
-		$matchprevrules 	= 'no';
+		$matchprevrules 	= 'yes';
 		$matchprevencryptrules 	= 'no';
 		$addencryptrules 	= 'yes';
 		$resanytoip 		= 'no';
@@ -11149,7 +11157,7 @@ while (<STDIN>) {
 		$incconobjs 		= 'no';
 		$filterunloggedrulewithlog = 'yes';
 		$translatewithnats 	= 'no';
-		$matchprevrules 	= 'no';
+		$matchprevrules 	= 'no'; 
 		$matchprevencryptrules 	= 'no';
 		$addencryptrules 	= 'yes';
 		$resanytoip 		= 'yes';
@@ -19220,6 +19228,7 @@ sub output_terraform_panos {
 	my %srvcobjxlates;
 	my %multinetobjs;
 	my %netobjzones;
+	my %netgrpzones;
 	my $nsfilename;
 
 	my %sourceobjprint = ();
@@ -19366,10 +19375,20 @@ HERE
 					print "   WARNING: FAILED TO ASSIGN A ZONE TO OBJECT, try adding mappings: $objn\n";
 				}
 			}
+		}
+	}
 
-# TODO: map zones for groups.
-# TODO: correct the incorerct zone mapping methodology above
+	# NOTE Add all zones from objects in a group to the network group zones for use in rule output
 
+	foreach my $groupname (keys %{$srcbundle_ref->{'netgroups'}}) {
+		if (exists $srcbundle_ref->{'netgroupobjs'} && exists $srcbundle_ref->{'netgroupobjs'}{$groupname}) { 
+			foreach my $objname (keys %{$srcbundle_ref->{'netgroupobjs'}{$groupname}}) {
+				if (exists $netobjzones{$objname}) {
+					$netgrpzones{$groupname}{'zones'}{$netobjzones{$objname}{'zone'}}++;
+				}
+			}
+		} else {
+			print "   WARNING: Net group with NO flattened object group definition\n";
 		}
 	}
 
@@ -19518,6 +19537,7 @@ HERE
 
 	print PANORASH "\n";
 	print TFPARASH <<'HERE';
+
 #========----------
 # CREATE INTERFACES
 #========----------
@@ -19554,6 +19574,7 @@ HERE
 
 	print PANORASH "\n";
 	print TFPARASH <<'HERE';
+
 #========-----
 # CREATE ZONES
 #========-----
@@ -19589,6 +19610,7 @@ HERE
 	print TFPARASH "#===============---------\n\n";
 
 # NOTE: print open netobjects tfvars map
+
 	print TFPARASH "addresses_bulk \= \{\n";
 
 	foreach my $netobject (sort keys %{$srcconfigobjs_ref}) {
@@ -19613,8 +19635,8 @@ HERE
 					my ($maskbin, $maskbits, $masklength)   = netmask_to_bin($nm);
 
 					# TERRAFORM OUTPUT
-					#print TFPARASH "  \"$destnetobj\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n    description \= \"$description\"\n  \}\n";
-					print TFPARASH "  \"$destnetobj\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n  \}\,\n";
+					print TFPARASH "  \"$destnetobj\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n    description \= \"$description\"\n  \}\n";
+					#print TFPARASH "  \"$destnetobj\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n  \}\,\n";
 
 					# PANOS CMD OUTPUT
 					print PANORASH "set address $destnetobj ip-netmask $ip\/$masklength\n";
@@ -19630,8 +19652,8 @@ HERE
 					my ($maskbin, $maskbits, $masklength)   = netmask_to_bin($nm);
 
 					# TERRAFORM OUTPUT
-					#print TFPARASH "  \"$netobject\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n    description \= \"$description\"\n  \}\n";
-					print TFPARASH "  \"$netobject\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n  \}\,\n";
+					print TFPARASH "  \"$netobject\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n    description \= \"$description\"\n  \}\n";
+					#print TFPARASH "  \"$netobject\" \= \{\n    value \= \"$ip\/$masklength\"\n    type \= \"ip-netmask\"\n  \}\,\n";
 
 					# PANOS CMD OUTPUT
 					print PANORASH "set address $netobject ip-netmask $ip\/$masklength\n";
@@ -19660,8 +19682,8 @@ HERE
 			}
 
 			# TERRAFORM OUTPUT
-			#print TFPARASH "  \"$netobject\" \= \{\n    name \= \"$netobject\"    value \= \"$ipstart\-$ipend\"\n    type \= \"ip-range\"\n    description \= \"$description\"\n  \}\n";
-			print TFPARASH "  \"$netobject\" \= \{\n    name \= \"$netobject\"    value \= \"$ipstart\-$ipend\"\n    type \= \"ip-range\"\n  \}\,\n";
+			print TFPARASH "  \"$netobject\" \= \{\n    name \= \"$netobject\"    value \= \"$ipstart\-$ipend\"\n    type \= \"ip-range\"\n    description \= \"$description\"\n  \}\n";
+			#print TFPARASH "  \"$netobject\" \= \{\n    name \= \"$netobject\"    value \= \"$ipstart\-$ipend\"\n    type \= \"ip-range\"\n  \}\,\n";
 
 			# PANOS CLI OUTPUT
 			print PANORASH "set address $netobject ip-range $ipstart\-$ipend\n";
@@ -19975,13 +19997,13 @@ HERE
 			my $objcount	= scalar keys %{$srcbundle_ref->{'netgroups'}{$ruleobj}};
 			my @groupobjs	= keys %{$srcbundle_ref->{'netgroupobjs'}{$ruleobj}};
 
-			my $zone;
-			foreach my $grpobj (keys %{$srcbundle_ref->{'netgroupobjs'}{$ruleobj}}) {
-				$zone 	= $netobjzones{$grpobj}{'zone'};
-				if (defined($zone)) { last; }
-			}
+			#my $zone;
+			#foreach my $grpobj (keys %{$srcbundle_ref->{'netgroupobjs'}{$ruleobj}}) {
+			#	$zone 	= $netobjzones{$grpobj}{'zone'};
+			#	if (defined($zone)) { last; }
+			#}
 
-			$netobjzones{$ruleobj}{'zone'} = $zone;
+			#$netobjzones{$ruleobj}{'zone'} = $zone;
 
 			foreach my $groupobj (@groupobjs) {
 				my $ruleobjx = $ruleobj;
@@ -19992,7 +20014,7 @@ HERE
 					$groupobj = $netobjxlates{$groupobj}{'xlate'};
 					$sourceobjprint{"\"$groupobj\""}++;
 				} else {
-					unless(defined($zone)) { print "   WARNING: NO ZONE for $ruleobjx while adding $groupobj\n"; next;}
+					#unless(defined($zone)) { print "   WARNING: NO ZONE for $ruleobjx while adding $groupobj\n"; next;}
 					$sourceobjprint{"\"$groupobj\""}++;
 				}
 			}
@@ -20098,8 +20120,8 @@ HERE
 						#print "AAAAAAAAAAAAAWWWWWWWW: $dstgrp\n";
 					}
 				}
-
 			}
+
 			my $objcount = scalar keys %{$srcbundle_ref->{'srvcgroupobjs'}{$ruleobj}};
 			my @groupobjs = keys %{$srcbundle_ref->{'srvcgroupobjs'}{$ruleobj}};
 			my $ruleobjx  = $ruleobj;
@@ -20296,7 +20318,12 @@ HERE
 			}
 			$srcsout{"\"$srcout\""}++;
 
-			if (exists $netobjzones{$src}{'zone'}) {
+			if (exists $netgrpzones{$src}{'zones'}) {
+				foreach my $srcobjzone (keys %{$netgrpzones{$src}{'zones'}}) {
+					$srczones{"\"$srcobjzone\""}++;
+				}
+			} 
+			elsif (exists $netobjzones{$src}{'zone'}) {
 				$srczones{"\"$netobjzones{$src}{'zone'}\""}++;
 			}
 		}
@@ -20308,7 +20335,12 @@ HERE
 			}
 			$dstsout{"\"$dstout\""}++;
 
-			if (exists $netobjzones{$dst}{'zone'}) {
+			if (exists $netgrpzones{$dst}{'zones'}) {
+				foreach my $dstobjzone (keys %{$netgrpzones{$dst}{'zones'}}) {
+					$dstzones{"\"$dstobjzone\""}++;
+				}
+			} 
+			elsif (exists $netobjzones{$dst}{'zone'}) {
 				$dstzones{"\"$netobjzones{$dst}{'zone'}\""}++;
 			}
 		}
@@ -20374,8 +20406,8 @@ HERE
 
 		print TFPARASH <<"HERE";
       {
-        name   = "$rulenameout"
         tags   = [$rulegroupsout]
+        name   = "$rulenameout"
         action = "$action"
         source_zones          = [$srczones]
         source_addresses      = [$srcsout]
@@ -20388,7 +20420,8 @@ HERE
         vulnerability = "default"
         url_filtering = "default"
         log_start     = "true"
-        log_end       = "true"$auditcomment
+        log_end       = "true"
+        log_setting   = "syslog"$auditcomment
       },
 
 HERE
@@ -20428,6 +20461,90 @@ HERE
 #HERE
 
 	print TFPARASH <<'HERE';
+
+
+#===============---------------
+# PANOS LOGGING SERVER PROFILES
+#===============---------------
+
+log_server_profiles = {
+  "Syslog_Profile" = {
+    syslog_server = [
+      {
+        name      = "LogServerName"
+        server    = "x.x.x.x"
+        transport = "UDP"
+        port      = "514"
+      },
+    ]
+  }
+}
+
+
+#=======-----------------------
+# PANOS LOG FORWARDING PROFILES
+#=======-----------------------
+
+/*  
+# NOTE: this resource is broken, Add the following config manually:
+# https://github.com/PaloAltoNetworks/terraform-provider-panos/issues/524
+
+log_forwarding_profiles = {
+  "syslog" = {
+    match_lists = [
+      {
+        name                   = "traffic"
+        log_type               = "traffic"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "threat"
+        log_type               = "threat"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "wildfire"
+        log_type               = "wildfire"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "url"
+        log_type               = "url"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "auth"
+        log_type               = "auth"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "data"
+        log_type               = "data"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "tunnel"
+        log_type               = "tunnel"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+      {
+        name                   = "decryption"
+        log_type               = "decryption"
+        syslog_server_profiles = ["Syslog_Profile"]
+        send_to_panorama       = false
+      },
+    ]
+  }
+}
+*/
+
 
 #================-----------------
 # CREATE DEFAULT SECURITY POLICIES
@@ -20906,7 +21023,6 @@ sub rule_bin_proc_add {
 			$natrule_ref->{'natsrc'}  = $rule_ref->{'natsrcip'};
 			$netobjects_ref->{$srrulesrc}{'natsrc'}{$rule_ref->{'natsrcip'}} = $srrulenum;
 		}
-
 
 		unless (exists $natrule_ref->{'natsrc'}) {
 			$natrule_ref->{'natsrc'}  = 'ORIGINAL';
@@ -72559,29 +72675,14 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'active-directory'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'active-directory'}{'default'}    	= 'Default'; 
 	$srvcobjects_ref->{'active-directory'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'active-directory'}{'port'}{'tcp'}	= '135,138,139,389,445,464,636,5722-9389'; 
+	$srvcobjects_ref->{'active-directory'}{'port'}{'tcp'}	= '135,138,139,389,445,464,636,5722-9389,49152-65535'; 
 	$srvcobjects_ref->{'active-directory'}{'port'}{'udp'}	= '88,123,137,138,389,445,464'; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'135'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'138'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'139'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'389'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'445'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'464'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'tcp'}{'636'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'88'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'123'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'137'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'138'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'389'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'445'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'464'}++; 
-	#$srvcobjects_ref->{'active-directory'}{'ports'}{'udp'}{'2535'}++; 
 
 	$srvcobjects_ref->{'dhcp'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'dhcp'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'dhcp'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'dhcp'}{'port'}{'tcp'}	= '67-68'	; 
-	$srvcobjects_ref->{'dhcp'}{'port'}{'udp'}	= '67-68'	; 
+	$srvcobjects_ref->{'dhcp'}{'port'}{'tcp'}	= '67,68'	; 
+	$srvcobjects_ref->{'dhcp'}{'port'}{'udp'}	= '67,68'	; 
 
 	$srvcobjects_ref->{'dns'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'dns'}{'default'}    	= 'Default'	; 
@@ -72597,40 +72698,19 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'icmp'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'icmp'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'icmp'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'icmp'}{'port'}{'icmp'}	= '0'	; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'1'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'2'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'3'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'4'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'5'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'6'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'7'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'8'}++; 
-	$srvcobjects_ref->{'icmp'}{'ports'}{'icmp'}{'9'}++; 
+	$srvcobjects_ref->{'icmp'}{'port'}{'icmp'}	= '0-9'	; 
 
 	$srvcobjects_ref->{'kerberos'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'kerberos'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'kerberos'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'kerberos'}{'port'}{'tcp'}	= '88'	; 
-	$srvcobjects_ref->{'kerberos'}{'port'}{'udp'}	= '88'	; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'tcp'}{'464'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'tcp'}{'749'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'tcp'}{'750'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'tcp'}{'754'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'udp'}{'464'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'udp'}{'749'}++; 
-	$srvcobjects_ref->{'kerberos'}{'ports'}{'udp'}{'750'}++; 
+	$srvcobjects_ref->{'kerberos'}{'port'}{'tcp'}	= '88,464,749,750,754'	; 
+	$srvcobjects_ref->{'kerberos'}{'port'}{'udp'}	= '88,464,749,750'	; 
 
 	$srvcobjects_ref->{'ldap'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ldap'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'ldap'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'ldap'}{'port'}{'tcp'}	= '389'	; 
-	$srvcobjects_ref->{'ldap'}{'port'}{'udp'}	= '389'	; 
-	$srvcobjects_ref->{'ldap'}{'ports'}{'tcp'}{'3268'}++; 
-	$srvcobjects_ref->{'ldap'}{'ports'}{'tcp'}{'3269'}++; 
-	$srvcobjects_ref->{'ldap'}{'ports'}{'tcp'}{'636'}++; 
-	$srvcobjects_ref->{'ldap'}{'ports'}{'udp'}{'389'}++; 
-	$srvcobjects_ref->{'ldap'}{'ports'}{'udp'}{'3268'}++; 
+	$srvcobjects_ref->{'ldap'}{'port'}{'tcp'}	= '389,636,3268,3269'	; 
+	$srvcobjects_ref->{'ldap'}{'port'}{'udp'}	= '389,3268'	; 
 
 	$srvcobjects_ref->{'ms-adws'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ms-adws'}{'default'}    	= 'Default'	; 
@@ -72645,19 +72725,14 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'ms-ds-smb'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ms-ds-smb'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'ms-ds-smb'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'ms-ds-smb'}{'port'}{'tcp'}	= '445'	; 
+	$srvcobjects_ref->{'ms-ds-smb'}{'port'}{'tcp'}	= '139,445'	; 
 	$srvcobjects_ref->{'ms-ds-smb'}{'port'}{'udp'}	= '445'	; 
-	$srvcobjects_ref->{'ms-ds-smb'}{'ports'}{'tcp'}{'139'}++; 
 
 	$srvcobjects_ref->{'ms-netlogon'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ms-netlogon'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'ms-netlogon'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'ms-netlogon'}{'port'}{'tcp'}	= '135'	; 
-	$srvcobjects_ref->{'ms-netlogon'}{'port'}{'udp'}	= '137'	; 
-	$srvcobjects_ref->{'ms-netlogon'}{'ports'}{'tcp'}{'139'}++; 
-	$srvcobjects_ref->{'ms-netlogon'}{'ports'}{'udp'}{'137'}++; 
-	$srvcobjects_ref->{'ms-netlogon'}{'ports'}{'udp'}{'138'}++; 
-	$srvcobjects_ref->{'ms-netlogon'}{'ports'}{'udp'}{'445'}++; 
+	$srvcobjects_ref->{'ms-netlogon'}{'port'}{'tcp'}	= '135,139'	; 
+	$srvcobjects_ref->{'ms-netlogon'}{'port'}{'udp'}	= '137,138,445'	; 
 
 	$srvcobjects_ref->{'ms-rdp'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ms-rdp'}{'default'}    	= 'Default'	; 
@@ -72668,15 +72743,14 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'ms-update'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ms-update'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'ms-update'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'ms-update'}{'port'}{'tcp'}	= '8530'	; 
-	$srvcobjects_ref->{'ms-update'}{'ports'}{'tcp'}{'80'}++; 
-	$srvcobjects_ref->{'ms-update'}{'ports'}{'tcp'}{'443'}++; 
-	$srvcobjects_ref->{'ms-update'}{'ports'}{'tcp'}{'8531'}++; 
+	$srvcobjects_ref->{'ms-update'}{'port'}{'tcp'}	= '8530,8531'	; 
 
 	$srvcobjects_ref->{'msrpc'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'msrpc'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'msrpc'}{'description'}	= 'Cisco_Default'; 
+	#$srvcobjects_ref->{'msrpc'}{'port'}{'tcp'}	= '135,49152-65535'	; 
 	$srvcobjects_ref->{'msrpc'}{'port'}{'tcp'}	= '135'	; 
+	#$srvcobjects_ref->{'msrpc'}{'port'}{'udp'}	= '135,49152-65535'	; 
 	$srvcobjects_ref->{'msrpc'}{'port'}{'udp'}	= '135'	; 
 
 	$srvcobjects_ref->{'mssql-db-encrypted'}{'type'}        = 'tcp'	; 
@@ -72690,12 +72764,6 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'mssql-db-unencrypted'}{'description'}	= 'Cisco_Default'; 
 	$srvcobjects_ref->{'mssql-db-unencrypted'}{'port'}{'tcp'}	= '1433'	; 
 	$srvcobjects_ref->{'mssql-db-unencrypted'}{'port'}{'udp'}	= '1433'	; 
-
-	$srvcobjects_ref->{'msrpc'}{'type'}        	= 'tcp'	; 
-	$srvcobjects_ref->{'msrpc'}{'default'}    	= 'Default'	; 
-	$srvcobjects_ref->{'msrpc'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'msrpc'}{'port'}{'tcp'}	= '135'	; 
-	$srvcobjects_ref->{'msrpc'}{'port'}{'udp'}	= '135'	; 
 
 	$srvcobjects_ref->{'netbios-dg'}{'type'}        = 'tcp'	; 
 	$srvcobjects_ref->{'netbios-dg'}{'default'}    	= 'Default'	; 
@@ -72721,18 +72789,18 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'ntp'}{'port'}{'tcp'}	= '123'	; 
 	$srvcobjects_ref->{'ntp'}{'port'}{'udp'}	= '123'	; 
 
+	$ports_ref->{'tcp'}{'123'}{'name'} = 'ntp'		; 
+	$ports_ref->{'udp'}{'123'}{'name'} = 'ntp'		; 
+
 	$srvcobjects_ref->{'ping'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ping'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'ping'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'ping'}{'port'}{'icmp'}	= '0'	; 
-	$srvcobjects_ref->{'ping'}{'ports'}{'icmp'}{'8'}++; 
-	$srvcobjects_ref->{'ping'}{'port'}{'udp'}	= '135'	; 
+	$srvcobjects_ref->{'ping'}{'port'}{'icmp'}	= '0,8'	; 
 
 	$srvcobjects_ref->{'smtp'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'smtp'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'smtp'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'smtp'}{'port'}{'tcp'}	= '25'	; 
-	$srvcobjects_ref->{'smtp'}{'ports'}{'tcp'}{'587'}++; 
+	$srvcobjects_ref->{'smtp'}{'port'}{'tcp'}	= '25,587'	; 
 
 	$srvcobjects_ref->{'ssh'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'ssh'}{'default'}    	= 'Default'	; 
@@ -72754,12 +72822,9 @@ sub set_paloalto_defaults {
 	$srvcobjects_ref->{'web-browsing'}{'default'}    	= 'Default'	; 
 	$srvcobjects_ref->{'web-browsing'}{'description'}	= 'Cisco_Default'; 
 	$srvcobjects_ref->{'web-browsing'}{'port'}{'tcp'}	= '80'	; 
-	#$srvcobjects_ref->{'web-browsing'}{'port'}{'udp'}	= '80'	; 
 
 	$srvcobjects_ref->{'windows-remote-management'}{'type'}        	= 'tcp'	; 
 	$srvcobjects_ref->{'windows-remote-management'}{'default'}    	= 'Default'; 
 	$srvcobjects_ref->{'windows-remote-management'}{'description'}	= 'Cisco_Default'; 
-	$srvcobjects_ref->{'windows-remote-management'}{'port'}{'tcp'}	= '5985'; 
-	$srvcobjects_ref->{'windows-remote-management'}{'ports'}{'tcp'}{'5986'}++; 
-
+	$srvcobjects_ref->{'windows-remote-management'}{'port'}{'tcp'}	= '5985,5986'; 
 }
