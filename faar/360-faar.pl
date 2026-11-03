@@ -14,44 +14,57 @@
 
 # Currently supported input amd output firewall config types are:
 #---------------------------------------------------------------------------------------------------
-#		 - Cisco ASA: show run
+#		 - Cisco ASA/IOS: show run
 #		 - Netscreen ScreenOS 6: get config
 #		 - Checkpoint Firewall-1: odumper/ofiller csv format in, fwdoc nats in, dbedit out
-#		 - Palo Alto Panos NGFW: no input yet, terraform.tfvars out only
-#		 - Many similar typed configs can be "cat'ed" together for comparison via 'print' modes or duplicates Data::Dumper prints
+#		 - Many similar typed configs can be "cat'ed" together for comparison via 'print' modes or Data::Dumper 
 
 # Currently supported input firewall log types are:
 #---------------------------------------------------------------------------------------------------
-#		 - Cisco ASA: syslog text log
+#		 - Cisco ASA/IOS: syslog text log
 #		 - Netscreen ScreenOS 6: syslog text log
 #		 - Checkpoint Firewall-1: logexport utility format, 
 #		 - Many log files can be "cat'ed" together, in line log headers and prefixes are accounted for
 
+# Currently supported output only firewall config types are:
+#---------------------------------------------------------------------------------------------------
+#                - Palo Alto Panos NGFW Terraform Module tfvars: no input yet, terraform.tfvars out only
+
 # This script is hopefully written in a way that will make its workings understandable to firewall and network engineers
 #---------------------------------------------------------------------------------------------------
 
-# The latest version of this code can be found at http://sourceforge.net/projects/faar/ 
+# The latest version of this code can be found at: 
+# https://sourceforge.net/projects/faar/ or https://github.com/dan36zero/360-FAAR-Firewall-Analysis-Audit-Repair
 #---------------------------------------------------------------------------------------------------
 
-# Version v0.7.0 - This release adds a cidr filter after the rr object expansions during log to rule matching,
-#   20/08/2026   - Updates the cisco log parser to inslue IOS switch syslogs,
-#                - Adds support for ios configs, 
-#                - Sorts out default serivce definitions so they dont prevent group matching,
-#                - Adds a palo alto terraform panos ngfw config outputer 
-#                - Adds some new rr log parsing optoins: fltadd logs hits to rules but does not remove rules if not hit.
-#                - Makes the log filter complete on first hit again (most speciffic only)
-#                - Adding a service definition other than the default to a config bundle now loads logs of that fw service type.
-#                - Updated service ports so that port{proto} can contain a comma seperated list of ports and port ranges for each protocol.
-#                - Updated comments in output subs so they are displayed in a useful way.
-#                - Added some palo defaults required for MS networks.
-#                - Updated logjson processing to output a jsonlog file for each firewall config bundle..
+# Version v0.7.0 - This release adds a second cidr filter after the initial rr object expansions, 
+#   20/08/2026     during log to rule matching, this enables interesting filtering capabilities.
+#                - Updates the Cisco log parser to include IOS switch syslogs, 
+#                  the parser tries its best to assign the direction for connections.
+#                - Adds support for Cisco IOS configs. 
+#                - Sorts out default service definitions so they don't prevent group matching.
+#                - Adds a palo alto terraform panos nsfw config out-putter, no inputter yet. 
+#                - Adds some new rr log parsing option's: 
+#                  fltadd logs hits to rules but does not remove rules if not hit. 
+#                  It replaces 'yes' as the default mode - really you should use '*res' modes. 
+#                - Makes the log filter complete on first hit again (most specific hit only).
+#                - Adding a service definition other than the default to a config on the cmdline  
+#                  or load mode, now loads firewall logs of that other firewall type.
+#                - Updated service ports so that port{proto} can contain a 
+#                  comma separated list of ports and port ranges for each protocol.
+#                - Updated comments in output subs so they are output in a useful way.
+#                - Added some palo defaults required for MS networks (use 'no' service cmdline to output apps).
+#                - Updated logjson processing to output a jsonlog file for each firewall config bundle.
 #                - Added 'output' mode to directly output one firewall config to another config type.
-#                - Updated copylogs mode to copy logs to multiple conifgs at once.
+#                - Updated copylogs mode to copy logs to multiple or all configs at once.
 #                - Updated 'rr' mode so that all rule build types can be run and the best can be chosen.
 #                - Updated 'bldobjs' mode so that it also builds rules.
-#                - Fixed loads of errors!!
-#                  TODO: skip group if it is bigger than the list of objects being checked - optmization only no change to functionality.
-#                  TODO: identify palo app groups based on presence of portunknown in groups instead of postfixing '-Applications'
+#                - Added more rule build subs to 'rr' mode.
+#                - Fixed loads of errors!! eg: tcp and udp ports are named seperately now when resolved from logs.
+#                  TODO: skip group if it is bigger than the list of objects being checked in all rule build subs
+#                    optimisation only no change to functionality.
+#                  TODO: identify palo app groups based on presence of portunknown in groups
+#                    instead of postfixing '-Applications'.
 
 # Version v0.6.3 - This release updates the config pasers to permit you to specify the default service
 #   25/08/2017     set used to scan rules and service objects, for example to permit a checkpoint csv 
